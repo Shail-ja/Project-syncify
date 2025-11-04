@@ -7,6 +7,7 @@ import { Plus, Calendar, Users, MoreVertical } from "lucide-react";
 const Projects = () => {
   const projects = [
     {
+      id: "7153842",
       name: "Mobile App Redesign",
       description: "Complete overhaul of the mobile application UI/UX",
       status: "In Progress",
@@ -17,6 +18,7 @@ const Projects = () => {
       color: "from-purple-500 to-pink-500"
     },
     {
+      id: "2047619",
       name: "Backend API Development",
       description: "RESTful API development for new microservices",
       status: "In Progress",
@@ -27,6 +29,7 @@ const Projects = () => {
       color: "from-cyan-500 to-blue-500"
     },
     {
+      id: "8930417",
       name: "Marketing Campaign",
       description: "Q1 2026 marketing strategy and content creation",
       status: "Review",
@@ -37,6 +40,7 @@ const Projects = () => {
       color: "from-green-500 to-emerald-500"
     },
     {
+      id: "3567204",
       name: "Database Migration",
       description: "Migrate from PostgreSQL to distributed database",
       status: "Planning",
@@ -47,6 +51,7 @@ const Projects = () => {
       color: "from-orange-500 to-red-500"
     },
     {
+      id: "6401593",
       name: "Security Audit",
       description: "Comprehensive security review and penetration testing",
       status: "In Progress",
@@ -57,6 +62,7 @@ const Projects = () => {
       color: "from-red-500 to-rose-500"
     },
     {
+      id: "5782316",
       name: "Customer Portal",
       description: "Self-service portal for customer management",
       status: "Planning",
@@ -106,8 +112,8 @@ const Projects = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {projects.map((project, index) => (
-            <Card key={index} className="p-6 bg-card/50 backdrop-blur-sm border-border hover:border-primary/50 transition-all duration-300 hover:scale-[1.02] group">
+          {projects.map((project) => (
+            <Card key={project.id} className="p-6 bg-card/50 backdrop-blur-sm border-border hover:border-primary/50 transition-all duration-300 hover:scale-[1.02] group">
               <div className="flex items-start justify-between mb-4">
                 <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${project.color} flex items-center justify-center text-white font-bold text-xl`}>
                   {project.name.charAt(0)}
@@ -119,6 +125,18 @@ const Projects = () => {
 
               <h3 className="text-xl font-bold mb-2">{project.name}</h3>
               <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{project.description}</p>
+
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs text-muted-foreground truncate">ID: {project.id}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7"
+                  onClick={() => navigator.clipboard.writeText(project.id)}
+                >
+                  Copy ID
+                </Button>
+              </div>
 
               <div className="flex items-center gap-2 mb-4">
                 <Badge className={getStatusColor(project.status)}>

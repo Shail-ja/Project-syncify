@@ -45,9 +45,11 @@ const Navigation = () => {
             ))}
           </div>
 
-          <Button size="sm" className="bg-secondary shadow-glow-secondary">
-            Sign In
-          </Button>
+          <Link to="/signin">
+            <Button size="sm" className="bg-primary shadow-glow-primary">
+              Login
+            </Button>
+          </Link>
         </div>
       </div>
     </nav>
