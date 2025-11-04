@@ -61,7 +61,7 @@ const Index = () => {
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-8">
-              <Link to="/dashboard">
+              <Link to="/signup">
                 <Button 
                   size="lg" 
                   className="bg-primary hover:bg-primary-glow shadow-glow-primary transition-all duration-300 hover:scale-105 text-lg px-8 py-6"
@@ -171,12 +171,14 @@ const Index = () => {
           <p className="text-xl text-muted-foreground">
             Start your free trial today. No credit card required.
           </p>
+          <Link to="/signup">
           <Button 
             size="lg"
             className="bg-secondary hover:bg-secondary-glow shadow-glow-secondary transition-all duration-300 hover:scale-105 text-secondary-foreground text-lg px-10 py-6"
           >
             Start Free Trial
           </Button>
+          </Link>
         </div>
       </section>
 
