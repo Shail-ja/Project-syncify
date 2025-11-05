@@ -31,7 +31,7 @@ const SignUp = () => {
     setIsLoading(true);
     try {
        // Call backend signup
-      const resp = await apiPost<{ message: string; token?: string; email: string }>(
+      const resp = await apiPost<{ message: string; token?: string; email: string; requiresEmailVerification?: boolean }>(
         "/auth/register",
         { email, password, firstName, lastName }
       );
@@ -40,9 +40,13 @@ const SignUp = () => {
       if (resp.token) {
         localStorage.setItem("token", resp.token);
         localStorage.setItem("email", resp.email);
+        navigate("/dashboard");
+      } else if (resp.requiresEmailVerification) {
+        // Email verification required
+        setError("Please check your email to verify your account before signing in.");
+      } else {
+        throw new Error("Registration failed - no token received");
       }
-    
-      navigate("/dashboard");
     } catch (err: any) {
       setError(err?.message || "Failed to sign up");
     } finally {

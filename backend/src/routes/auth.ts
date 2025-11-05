@@ -27,7 +27,15 @@ router.post("/token", async (req, res) => {
   try {
     await supabase
       .from("users")
-      .upsert({ id, email })
+      .upsert(
+        {
+          id,
+          email,
+          first_name: data.user.user_metadata?.first_name || null,
+          last_name: data.user.user_metadata?.last_name || null,
+        },
+        { onConflict: "id" }
+      )
       .select("id")
       .single();
   } catch (err) {
@@ -41,21 +49,150 @@ router.post("/token", async (req, res) => {
 });
 
 // -------------------------------------------
-// Placeholder Login Route
+// Login Route
 // -------------------------------------------
 router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-  // ⚠️ Replace this logic later with Supabase Auth or your own password check
-  res.status(200).json({ message: "Login route (placeholder)", email });
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    // Sign in with Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (authError || !authData?.session) {
+      return res.status(401).json({ error: authError?.message || "Invalid email or password" });
+    }
+
+    const user = authData.user;
+    const accessToken = authData.session.access_token;
+
+    // Ensure user exists in users table
+    try {
+      await supabase
+        .from("users")
+        .upsert(
+          {
+            id: user.id,
+            email: user.email,
+            first_name: null, // Can be updated later if needed
+            last_name: null,
+          },
+          { onConflict: "id" }
+        )
+        .select("id")
+        .single();
+    } catch (err) {
+      console.warn("Failed to upsert user:", (err as any).message || err);
+    }
+
+    res.json({
+      message: "Login successful",
+      token: accessToken,
+      email: user.email,
+    });
+  } catch (error: any) {
+    console.error("Login error:", error);
+    res.status(500).json({ error: error?.message || "Internal server error" });
+  }
 });
 
 // -------------------------------------------
-// Placeholder Register Route
+// Register Route
 // -------------------------------------------
 router.post("/register", async (req, res) => {
-  const { email, password } = req.body;
-  // ⚠️ Replace this with your registration logic
-  res.status(201).json({ message: "Register route (placeholder)", email });
+  try {
+    const { email, password, firstName, lastName } = req.body;
+
+    console.log("Register request received:", { email, hasPassword: !!password, firstName, lastName });
+
+    if (!email || !password) {
+      console.log("Missing email or password");
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    // Validate password length (Supabase requires at least 6 characters)
+    if (password.length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters long" });
+    }
+
+    // Sign up with Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          first_name: firstName || "",
+          last_name: lastName || "",
+        },
+      },
+    });
+
+    if (authError) {
+      console.error("Supabase signup error:", authError);
+      
+      // Provide helpful error message for database errors
+      if (authError.code === "unexpected_failure" || authError.message?.includes("Database error")) {
+        return res.status(500).json({ 
+          error: "Database configuration error. Please check your Supabase database setup.",
+          details: "This usually indicates a missing or broken database trigger. Please run the SQL script in backend/fix_users_table.sql in your Supabase SQL Editor.",
+          code: authError.code
+        });
+      }
+      
+      return res.status(400).json({ error: authError.message });
+    }
+
+    if (!authData.user) {
+      console.error("No user returned from Supabase");
+      return res.status(400).json({ error: "Failed to create user" });
+    }
+
+    console.log("User created successfully:", authData.user.id);
+
+    // If email confirmation is required, Supabase won't return a session immediately
+    // Check if session exists (email confirmation disabled) or not (email confirmation enabled)
+    if (authData.session) {
+      // Email confirmation is disabled - user is logged in immediately
+      const accessToken = authData.session.access_token;
+
+      // Create user record in users table
+      try {
+        await supabase.from("users").upsert(
+          {
+            id: authData.user.id,
+            email: authData.user.email,
+            first_name: firstName || null,
+            last_name: lastName || null,
+          },
+          { onConflict: "id" }
+        );
+      } catch (err) {
+        console.warn("Failed to create user record:", (err as any).message || err);
+      }
+
+      return res.status(201).json({
+        message: "Account created successfully",
+        token: accessToken,
+        email: authData.user.email,
+      });
+    } else {
+      // Email confirmation is enabled - user needs to verify email
+      return res.status(201).json({
+        message: "Account created. Please check your email to verify your account.",
+        email: authData.user.email,
+        requiresEmailVerification: true,
+      });
+    }
+  } catch (error: any) {
+    console.error("Registration error:", error);
+    res.status(500).json({ error: error?.message || "Internal server error" });
+  }
 });
 
 export default router;

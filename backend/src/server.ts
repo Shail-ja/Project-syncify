@@ -30,6 +30,36 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
+// --- Redirect email confirmation links to frontend
+// This handles cases where Supabase redirect URL is misconfigured
+// Note: Hash fragments (#access_token) are only available client-side
+app.get("/", (req, res) => {
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:8080";
+  // Send HTML that redirects to frontend and preserves the hash
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Redirecting...</title>
+        <script>
+          // Preserve hash fragment and redirect to frontend
+          const hash = window.location.hash;
+          window.location.href = "${frontendUrl}/auth/callback" + hash;
+        </script>
+      </head>
+      <body>
+        <p>Redirecting to frontend...</p>
+        <script>
+          // Fallback if JavaScript is disabled
+          setTimeout(() => {
+            window.location.href = "${frontendUrl}/auth/callback";
+          }, 1000);
+        </script>
+      </body>
+    </html>
+  `);
+});
+
 // --- Test route
 app.use("/test", testRoutes);
 
