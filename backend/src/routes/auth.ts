@@ -25,14 +25,16 @@ router.post("/token", async (req, res) => {
   const id = data.user.id;
 
   try {
+    const metaFirstName = data.user.user_metadata?.first_name;
+    const metaLastName = data.user.user_metadata?.last_name;
     await supabase
       .from("users")
       .upsert(
         {
           id,
           email,
-          first_name: data.user.user_metadata?.first_name || null,
-          last_name: data.user.user_metadata?.last_name || null,
+          first_name: metaFirstName && metaFirstName.trim() ? metaFirstName.trim() : null,
+          last_name: metaLastName && metaLastName.trim() ? metaLastName.trim() : null,
         },
         { onConflict: "id" }
       )
@@ -46,6 +48,162 @@ router.post("/token", async (req, res) => {
   const user: UserPayload = { email, isAdmin, id } as any;
 
   res.json({ accessToken, user });
+});
+
+// -------------------------------------------
+// Get Current User Profile
+// -------------------------------------------
+router.get("/me", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Missing authorization token" });
+    }
+
+    const token = authHeader.slice(7);
+    const { data, error } = await supabase.auth.getUser(token);
+    
+    if (error || !data?.user) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    const userId = data.user.id;
+    const email = data.user.email || "";
+
+    // Get user data from users table
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("id, email, first_name, last_name, bio, phone, job_title, company, location, timezone, website, twitter, linkedin, github, created_at")
+      .eq("id", userId)
+      .single();
+
+    if (userError && userError.code !== "PGRST116") {
+      console.warn("Failed to fetch user data:", userError);
+    }
+
+    // Combine auth user data with database user data
+    const user = {
+      id: userId,
+      email: email,
+      firstName: userData?.first_name || data.user.user_metadata?.first_name || "",
+      lastName: userData?.last_name || data.user.user_metadata?.last_name || "",
+      fullName: userData?.first_name && userData?.last_name 
+        ? `${userData.first_name} ${userData.last_name}`.trim()
+        : email.split("@")[0], // Fallback to email username
+      bio: userData?.bio || "",
+      phone: userData?.phone || "",
+      jobTitle: userData?.job_title || "",
+      company: userData?.company || "",
+      location: userData?.location || "",
+      timezone: userData?.timezone || "",
+      website: userData?.website || "",
+      twitter: userData?.twitter || "",
+      linkedin: userData?.linkedin || "",
+      github: userData?.github || "",
+      createdAt: userData?.created_at || data.user.created_at,
+    };
+
+    res.json({ user });
+  } catch (error: any) {
+    console.error("Get user profile error:", error);
+    res.status(500).json({ error: error?.message || "Internal server error" });
+  }
+});
+
+// -------------------------------------------
+// Update User Profile
+// -------------------------------------------
+router.put("/me", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Missing authorization token" });
+    }
+
+    const token = authHeader.slice(7);
+    const { data, error } = await supabase.auth.getUser(token);
+    
+    if (error || !data?.user) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    const userId = data.user.id;
+    const { 
+      firstName, 
+      lastName, 
+      email: newEmail,
+      bio,
+      phone,
+      jobTitle,
+      company,
+      location,
+      timezone,
+      website,
+      twitter,
+      linkedin,
+      github
+    } = req.body;
+
+    // Update user in database
+    const updateData: any = {
+      updated_at: new Date().toISOString(),
+    };
+    
+    if (firstName !== undefined) updateData.first_name = firstName || null;
+    if (lastName !== undefined) updateData.last_name = lastName || null;
+    if (newEmail !== undefined && newEmail !== data.user.email) {
+      // Email changes require Supabase auth update (optional - can be handled separately)
+      updateData.email = newEmail;
+    }
+    if (bio !== undefined) updateData.bio = bio || null;
+    if (phone !== undefined) updateData.phone = phone || null;
+    if (jobTitle !== undefined) updateData.job_title = jobTitle || null;
+    if (company !== undefined) updateData.company = company || null;
+    if (location !== undefined) updateData.location = location || null;
+    if (timezone !== undefined) updateData.timezone = timezone || null;
+    if (website !== undefined) updateData.website = website || null;
+    if (twitter !== undefined) updateData.twitter = twitter || null;
+    if (linkedin !== undefined) updateData.linkedin = linkedin || null;
+    if (github !== undefined) updateData.github = github || null;
+
+    const { data: updatedUser, error: updateError } = await supabase
+      .from("users")
+      .update(updateData)
+      .eq("id", userId)
+      .select("id, email, first_name, last_name, bio, phone, job_title, company, location, timezone, website, twitter, linkedin, github, created_at")
+      .single();
+
+    if (updateError) {
+      console.error("Failed to update user:", updateError);
+      return res.status(500).json({ error: "Failed to update profile" });
+    }
+
+    const user = {
+      id: userId,
+      email: updatedUser?.email || data.user.email || "",
+      firstName: updatedUser?.first_name || "",
+      lastName: updatedUser?.last_name || "",
+      fullName: updatedUser?.first_name && updatedUser?.last_name 
+        ? `${updatedUser.first_name} ${updatedUser.last_name}`.trim()
+        : (updatedUser?.email || data.user.email || "").split("@")[0],
+      bio: updatedUser?.bio || "",
+      phone: updatedUser?.phone || "",
+      jobTitle: updatedUser?.job_title || "",
+      company: updatedUser?.company || "",
+      location: updatedUser?.location || "",
+      timezone: updatedUser?.timezone || "",
+      website: updatedUser?.website || "",
+      twitter: updatedUser?.twitter || "",
+      linkedin: updatedUser?.linkedin || "",
+      github: updatedUser?.github || "",
+      createdAt: updatedUser?.created_at || data.user.created_at,
+    };
+
+    res.json({ user, message: "Profile updated successfully" });
+  } catch (error: any) {
+    console.error("Update user profile error:", error);
+    res.status(500).json({ error: error?.message || "Internal server error" });
+  }
 });
 
 // -------------------------------------------
@@ -72,21 +230,59 @@ router.post("/login", async (req, res) => {
     const user = authData.user;
     const accessToken = authData.session.access_token;
 
-    // Ensure user exists in users table
+    // Ensure user exists in users table and get user data
+    let userData = null;
     try {
-      await supabase
+      const { data: existingUser } = await supabase
         .from("users")
-        .upsert(
-          {
-            id: user.id,
-            email: user.email,
-            first_name: null, // Can be updated later if needed
-            last_name: null,
-          },
-          { onConflict: "id" }
-        )
-        .select("id")
+        .select("first_name, last_name")
+        .eq("id", user.id)
         .single();
+
+      if (!existingUser) {
+        // Create user record if doesn't exist
+        const metaFirstName = user.user_metadata?.first_name;
+        const metaLastName = user.user_metadata?.last_name;
+        await supabase
+          .from("users")
+          .upsert(
+            {
+              id: user.id,
+              email: user.email,
+              first_name: metaFirstName && metaFirstName.trim() ? metaFirstName.trim() : null,
+              last_name: metaLastName && metaLastName.trim() ? metaLastName.trim() : null,
+            },
+            { onConflict: "id" }
+          );
+      } else {
+        // Update null values if metadata has them
+        const metaFirstName = user.user_metadata?.first_name;
+        const metaLastName = user.user_metadata?.last_name;
+        const updateData: any = {};
+        
+        if (!existingUser.first_name && metaFirstName && metaFirstName.trim()) {
+          updateData.first_name = metaFirstName.trim();
+        }
+        if (!existingUser.last_name && metaLastName && metaLastName.trim()) {
+          updateData.last_name = metaLastName.trim();
+        }
+        
+        if (Object.keys(updateData).length > 0) {
+          updateData.updated_at = new Date().toISOString();
+          await supabase
+            .from("users")
+            .update(updateData)
+            .eq("id", user.id);
+          
+          // Update userData with new values
+          userData = {
+            ...existingUser,
+            ...updateData,
+          };
+        } else {
+          userData = existingUser;
+        }
+      }
     } catch (err) {
       console.warn("Failed to upsert user:", (err as any).message || err);
     }
@@ -95,6 +291,8 @@ router.post("/login", async (req, res) => {
       message: "Login successful",
       token: accessToken,
       email: user.email,
+      firstName: userData?.first_name || user.user_metadata?.first_name || "",
+      lastName: userData?.last_name || user.user_metadata?.last_name || "",
     });
   } catch (error: any) {
     console.error("Login error:", error);
@@ -167,8 +365,8 @@ router.post("/register", async (req, res) => {
           {
             id: authData.user.id,
             email: authData.user.email,
-            first_name: firstName || null,
-            last_name: lastName || null,
+            first_name: firstName && firstName.trim() ? firstName.trim() : null,
+            last_name: lastName && lastName.trim() ? lastName.trim() : null,
           },
           { onConflict: "id" }
         );
