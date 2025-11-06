@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import Navigation from "@/components/Navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,8 +9,124 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { User, Bell, Shield, Palette, Globe, Upload, Link as LinkIcon, Trash2, Key, Download, Monitor } from "lucide-react";
 import ShinyText from "@/components/ShinyText";
+import { apiGet, apiPut } from "@/lib/api";
+
+interface UserProfile {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  bio?: string;
+  phone?: string;
+  jobTitle?: string;
+  company?: string;
+  location?: string;
+  timezone?: string;
+  website?: string;
+  twitter?: string;
+  linkedin?: string;
+  github?: string;
+  createdAt?: string;
+}
 
 const Settings = () => {
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [bio, setBio] = useState("");
+  const [phone, setPhone] = useState("");
+  const [jobTitle, setJobTitle] = useState("");
+  const [company, setCompany] = useState("");
+  const [location, setLocation] = useState("");
+  const [timezone, setTimezone] = useState("");
+  const [website, setWebsite] = useState("");
+  const [twitter, setTwitter] = useState("");
+  const [linkedin, setLinkedin] = useState("");
+  const [github, setGithub] = useState("");
+  const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          // Fallback to localStorage email if no token
+          const storedEmail = localStorage.getItem("email");
+          if (storedEmail) {
+            setEmail(storedEmail);
+            setFirstName("");
+            setLastName("");
+          }
+          setLoading(false);
+          return;
+        }
+
+        const response = await apiGet<{ user: UserProfile }>("/auth/me");
+        setUser(response.user);
+        setFirstName(response.user.firstName || "");
+        setLastName(response.user.lastName || "");
+        setEmail(response.user.email || localStorage.getItem("email") || "");
+        setBio(response.user.bio || "");
+        setPhone(response.user.phone || "");
+        setJobTitle(response.user.jobTitle || "");
+        setCompany(response.user.company || "");
+        setLocation(response.user.location || "");
+        setTimezone(response.user.timezone || "");
+        setWebsite(response.user.website || "");
+        setTwitter(response.user.twitter || "");
+        setLinkedin(response.user.linkedin || "");
+        setGithub(response.user.github || "");
+      } catch (error: any) {
+        console.error("Failed to fetch user profile:", error);
+        // Fallback to localStorage
+        const storedEmail = localStorage.getItem("email");
+        if (storedEmail) {
+          setEmail(storedEmail);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserProfile();
+  }, []);
+
+  const handleSaveProfile = async () => {
+    setSaving(true);
+    setSaveMessage(null);
+    try {
+      const response = await apiPut<{ user: UserProfile; message: string }>("/auth/me", {
+        firstName,
+        lastName,
+        email,
+        bio,
+        phone,
+        jobTitle,
+        company,
+        location,
+        timezone,
+        website,
+        twitter,
+        linkedin,
+        github,
+      });
+      
+      setUser(response.user);
+      setSaveMessage({ type: "success", text: response.message || "Profile updated successfully!" });
+      
+      // Clear message after 3 seconds
+      setTimeout(() => setSaveMessage(null), 3000);
+    } catch (error: any) {
+      setSaveMessage({ type: "error", text: error?.message || "Failed to update profile" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
@@ -49,7 +166,25 @@ const Settings = () => {
                 {/* Avatar Section */}
                 <div className="flex items-center gap-6">
                   <div className="w-24 h-24 rounded-full bg-gradient-cosmic flex items-center justify-center text-3xl font-bold">
-                    JD
+                    {(() => {
+                      if (user?.fullName && user.fullName.trim()) {
+                        const initials = user.fullName
+                          .split(" ")
+                          .filter(n => n.length > 0)
+                          .map(n => n[0])
+                          .join("")
+                          .toUpperCase()
+                          .slice(0, 2);
+                        return initials || email[0]?.toUpperCase() || "U";
+                      }
+                      if (firstName && lastName) {
+                        return `${firstName[0]}${lastName[0]}`.toUpperCase();
+                      }
+                      if (firstName) {
+                        return firstName[0].toUpperCase();
+                      }
+                      return email[0]?.toUpperCase() || "U";
+                    })()}
                   </div>
                   <div className="space-y-2">
                     <Button variant="outline" size="sm" className="gap-2">
@@ -65,20 +200,46 @@ const Settings = () => {
                 {/* Basic Information */}
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="name">Full Name</Label>
-                    <Input id="name" placeholder="Enter your name" defaultValue="John Doe" />
+                    <Label htmlFor="firstName">First Name</Label>
+                    <Input 
+                      id="firstName" 
+                      placeholder="Enter your first name" 
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      disabled={loading}
+                    />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="username">Username</Label>
-                    <Input id="username" placeholder="@username" defaultValue="johndoe" />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input id="email" type="email" placeholder="your@email.com" defaultValue="john@example.com" />
+                    <Label htmlFor="lastName">Last Name</Label>
+                    <Input 
+                      id="lastName" 
+                      placeholder="Enter your last name" 
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      disabled={loading}
+                    />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="phone">Phone Number</Label>
-                    <Input id="phone" type="tel" placeholder="+1 (555) 000-0000" />
+                    <Input 
+                      id="phone" 
+                      type="tel" 
+                      placeholder="+1 (555) 000-0000"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input 
+                      id="email" 
+                      type="email" 
+                      placeholder="your@email.com" 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      disabled={loading}
+                    />
                   </div>
                 </div>
 
@@ -88,7 +249,9 @@ const Settings = () => {
                     id="bio" 
                     className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     placeholder="Tell us about yourself"
-                    defaultValue="Product designer passionate about creating beautiful experiences."
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                    disabled={loading}
                   />
                 </div>
 
@@ -98,24 +261,49 @@ const Settings = () => {
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="job">Job Title</Label>
-                    <Input id="job" placeholder="Your role" defaultValue="Senior Product Designer" />
+                    <Input 
+                      id="job" 
+                      placeholder="Your role"
+                      value={jobTitle}
+                      onChange={(e) => setJobTitle(e.target.value)}
+                      disabled={loading}
+                    />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="company">Company</Label>
-                    <Input id="company" placeholder="Company name" defaultValue="Acme Inc." />
+                    <Input 
+                      id="company" 
+                      placeholder="Company name"
+                      value={company}
+                      onChange={(e) => setCompany(e.target.value)}
+                      disabled={loading}
+                    />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="location">Location</Label>
-                    <Input id="location" placeholder="City, Country" defaultValue="San Francisco, CA" />
+                    <Input 
+                      id="location" 
+                      placeholder="City, Country"
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      disabled={loading}
+                    />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="timezone">Timezone</Label>
-                    <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                      <option>Pacific Time (PT)</option>
-                      <option>Mountain Time (MT)</option>
-                      <option>Central Time (CT)</option>
-                      <option>Eastern Time (ET)</option>
-                      <option>UTC</option>
+                    <select 
+                      id="timezone"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={timezone}
+                      onChange={(e) => setTimezone(e.target.value)}
+                      disabled={loading}
+                    >
+                      <option value="">Select timezone</option>
+                      <option value="Pacific Time (PT)">Pacific Time (PT)</option>
+                      <option value="Mountain Time (MT)">Mountain Time (MT)</option>
+                      <option value="Central Time (CT)">Central Time (CT)</option>
+                      <option value="Eastern Time (ET)">Eastern Time (ET)</option>
+                      <option value="UTC">UTC</option>
                     </select>
                   </div>
                 </div>
@@ -130,34 +318,73 @@ const Settings = () => {
                       <Label htmlFor="website">Website / Portfolio</Label>
                       <div className="flex gap-2">
                         <LinkIcon className="w-5 h-5 text-muted-foreground mt-2" />
-                        <Input id="website" placeholder="https://yourwebsite.com" />
+                        <Input 
+                          id="website" 
+                          placeholder="https://yourwebsite.com"
+                          value={website}
+                          onChange={(e) => setWebsite(e.target.value)}
+                          disabled={loading}
+                        />
                       </div>
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="twitter">Twitter / X</Label>
                       <div className="flex gap-2">
                         <LinkIcon className="w-5 h-5 text-muted-foreground mt-2" />
-                        <Input id="twitter" placeholder="https://twitter.com/username" />
+                        <Input 
+                          id="twitter" 
+                          placeholder="https://twitter.com/username"
+                          value={twitter}
+                          onChange={(e) => setTwitter(e.target.value)}
+                          disabled={loading}
+                        />
                       </div>
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="linkedin">LinkedIn</Label>
                       <div className="flex gap-2">
                         <LinkIcon className="w-5 h-5 text-muted-foreground mt-2" />
-                        <Input id="linkedin" placeholder="https://linkedin.com/in/username" />
+                        <Input 
+                          id="linkedin" 
+                          placeholder="https://linkedin.com/in/username"
+                          value={linkedin}
+                          onChange={(e) => setLinkedin(e.target.value)}
+                          disabled={loading}
+                        />
                       </div>
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="github">GitHub</Label>
                       <div className="flex gap-2">
                         <LinkIcon className="w-5 h-5 text-muted-foreground mt-2" />
-                        <Input id="github" placeholder="https://github.com/username" />
+                        <Input 
+                          id="github" 
+                          placeholder="https://github.com/username"
+                          value={github}
+                          onChange={(e) => setGithub(e.target.value)}
+                          disabled={loading}
+                        />
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <Button className="bg-primary shadow-glow-primary">Save Changes</Button>
+                {saveMessage && (
+                  <div className={`p-3 rounded-md text-sm ${
+                    saveMessage.type === "success" 
+                      ? "bg-green-500/10 text-green-500 border border-green-500/20" 
+                      : "bg-red-500/10 text-red-500 border border-red-500/20"
+                  }`}>
+                    {saveMessage.text}
+                  </div>
+                )}
+                <Button 
+                  className="bg-primary shadow-glow-primary" 
+                  onClick={handleSaveProfile}
+                  disabled={saving || loading}
+                >
+                  {saving ? "Saving..." : "Save Changes"}
+                </Button>
               </div>
             </Card>
           </TabsContent>
