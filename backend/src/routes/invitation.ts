@@ -2,11 +2,12 @@ import express from "express";
 import { v4 as uuid } from "uuid";
 import { supabase } from "../config/supabase";        // ✅ Fixed path
 import { sendInvitationEmail } from "../utils/email"; // ✅ Fixed path
+import requireAuth from "../middleware/requireAuth";  // ✅ Add auth middleware
 
 const router = express.Router();
 
 // ✅ Invite to project
-router.post("/projects/:projectId/invite", async (req, res) => {
+router.post("/:projectId/invite", requireAuth, async (req, res) => {
   try {
     const { projectId } = req.params;
     const { email, role = "member" } = req.body;

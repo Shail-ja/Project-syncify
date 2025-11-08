@@ -34,7 +34,7 @@ const AcceptInvite = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchInvitation = async () => {
+    const processInvitation = async () => {
       if (!token) {
         setError("No invitation token provided");
         setLoading(false);
@@ -49,16 +49,52 @@ const AcceptInvite = () => {
           throw new Error(errorData.error || "Failed to fetch invitation");
         }
         const data = await response.json();
-        setInvitation(data.invitation);
-      } catch (err: any) {
-        setError(err.message || "Failed to load invitation");
+        const inv = data.invitation;
+        setInvitation(inv);
+
+        // Auto-accept if pending and not expired
+        if (inv.status === 'pending' && new Date(inv.expires_at) >= new Date()) {
+          // Check if user is authenticated
+          const isAuthenticated = typeof window !== 'undefined' && !!localStorage.getItem('token');
+          if (!isAuthenticated) {
+            // Store token and redirect to sign in
+            localStorage.setItem('pendingInviteToken', token);
+            navigate('/signin?redirect=/invitations/accept?token=' + encodeURIComponent(token));
+            return;
+          }
+
+          // Auto-accept
+          setProcessing(true);
+          try {
+            const acceptResponse = await apiPost<{ ok: boolean; message: string; project?: { id: string; title: string } }>(
+              '/teams/invitations/accept',
+              { token }
+            );
+            localStorage.removeItem('pendingInviteToken');
+            toast({
+              title: "Invitation Accepted",
+              description: "You have successfully joined the team!",
+            });
+            // Redirect to teams page after 2 seconds
+            setTimeout(() => {
+              navigate('/teams');
+            }, 2000);
+          } catch (err: unknown) {
+            const error = err as { message?: string };
+            setError(error.message || "Failed to accept invitation");
+            setProcessing(false);
+          }
+        }
+      } catch (err: unknown) {
+        const error = err as { message?: string };
+        setError(error.message || "Failed to load invitation");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchInvitation();
-  }, [token]);
+    processInvitation();
+  }, [token, navigate, toast]);
 
   const handleAccept = async () => {
     if (!token) {
@@ -79,7 +115,7 @@ const AcceptInvite = () => {
     setError(null);
 
     try {
-      const response = await apiPost<{ ok: boolean; message: string; project?: any }>(
+      const response = await apiPost<{ ok: boolean; message: string; project?: { id: string; title: string } }>(
         '/teams/invitations/accept',
         { token }
       );
@@ -98,11 +134,12 @@ const AcceptInvite = () => {
       } else {
         navigate('/projects');
       }
-    } catch (err: any) {
-      setError(err.message || "Failed to accept invitation");
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setError(error.message || "Failed to accept invitation");
       toast({
         title: "Error",
-        description: err.message || "Failed to accept invitation",
+        description: error.message || "Failed to accept invitation",
         variant: "destructive",
       });
     } finally {
@@ -164,12 +201,12 @@ const AcceptInvite = () => {
             {isAccepted && (
               <div className="flex flex-col items-center space-y-4 text-center">
                 <CheckCircle2 className="w-16 h-16 text-green-500" />
-                <h2 className="text-2xl font-bold">Invitation Already Accepted</h2>
+                <h2 className="text-2xl font-bold">Invitation Accepted</h2>
                 <p className="text-muted-foreground">
-                  This invitation has already been accepted.
+                  You have successfully joined the team!
                 </p>
-                <Button onClick={() => navigate('/projects')}>
-                  Go to Projects
+                <Button onClick={() => navigate('/teams')}>
+                  Go to Teams
                 </Button>
               </div>
             )}
@@ -200,7 +237,15 @@ const AcceptInvite = () => {
               </div>
             )}
 
-            {isPending && (
+            {isPending && processing && (
+              <div className="flex flex-col items-center space-y-4 text-center">
+                <Loader2 className="w-16 h-16 animate-spin text-primary" />
+                <h2 className="text-2xl font-bold">Accepting Invitation...</h2>
+                <p className="text-muted-foreground">Please wait while we process your invitation.</p>
+              </div>
+            )}
+
+            {isPending && !processing && (
               <>
                 <div className="flex flex-col items-center space-y-4 text-center">
                   <Mail className="w-16 h-16 text-primary" />

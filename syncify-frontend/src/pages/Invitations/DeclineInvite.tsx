@@ -34,7 +34,7 @@ const DeclineInvite = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchInvitation = async () => {
+    const processInvitation = async () => {
       if (!token) {
         setError("No invitation token provided");
         setLoading(false);
@@ -49,7 +49,41 @@ const DeclineInvite = () => {
           throw new Error(errorData.error || "Failed to fetch invitation");
         }
         const data = await response.json();
-        setInvitation(data.invitation);
+        const inv = data.invitation;
+        setInvitation(inv);
+
+        // Auto-decline if pending and not expired
+        if (inv.status === 'pending' && new Date(inv.expires_at) >= new Date()) {
+          // Check if user is authenticated
+          const isAuthenticated = typeof window !== 'undefined' && !!localStorage.getItem('token');
+          if (!isAuthenticated) {
+            // Store token and redirect to sign in
+            localStorage.setItem('pendingInviteToken', token);
+            navigate('/signin?redirect=/invitations/decline?token=' + encodeURIComponent(token));
+            return;
+          }
+
+          // Auto-decline
+          setProcessing(true);
+          try {
+            const declineResponse = await apiPost<{ ok: boolean; message: string }>(
+              '/teams/invitations/decline',
+              { token }
+            );
+            localStorage.removeItem('pendingInviteToken');
+            toast({
+              title: "Invitation Declined",
+              description: "You have declined the invitation.",
+            });
+            // Redirect to homepage after 2 seconds
+            setTimeout(() => {
+              navigate('/');
+            }, 2000);
+          } catch (err: any) {
+            setError(err.message || "Failed to decline invitation");
+            setProcessing(false);
+          }
+        }
       } catch (err: any) {
         setError(err.message || "Failed to load invitation");
       } finally {
@@ -57,8 +91,8 @@ const DeclineInvite = () => {
       }
     };
 
-    fetchInvitation();
-  }, [token]);
+    processInvitation();
+  }, [token, navigate, toast]);
 
   const handleDecline = async () => {
     if (!token) {
@@ -172,14 +206,22 @@ const DeclineInvite = () => {
 
             {isDeclined && (
               <div className="flex flex-col items-center space-y-4 text-center">
-                <CheckCircle2 className="w-16 h-16 text-muted-foreground" />
-                <h2 className="text-2xl font-bold">Invitation Already Declined</h2>
+                <XCircle className="w-16 h-16 text-muted-foreground" />
+                <h2 className="text-2xl font-bold">Invitation Declined</h2>
                 <p className="text-muted-foreground">
-                  This invitation has already been declined.
+                  You have declined this invitation.
                 </p>
                 <Button onClick={() => navigate('/')} variant="outline">
                   Go to Homepage
                 </Button>
+              </div>
+            )}
+
+            {isPending && processing && (
+              <div className="flex flex-col items-center space-y-4 text-center">
+                <Loader2 className="w-16 h-16 animate-spin text-primary" />
+                <h2 className="text-2xl font-bold">Declining Invitation...</h2>
+                <p className="text-muted-foreground">Please wait while we process your request.</p>
               </div>
             )}
 

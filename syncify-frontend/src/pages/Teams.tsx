@@ -7,9 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
-import { MoreHorizontal, Users } from "lucide-react";
-import { useMemo, useState } from "react";
+import { MoreHorizontal, Users, Loader2 } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { apiGet } from "@/lib/api";
 
 const Teams = () => {
   const navigate = useNavigate();
@@ -24,23 +25,64 @@ const Teams = () => {
   const [createLoading, setCreateLoading] = useState(false);
 
   const toSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-  const seedTeams = useMemo(
-    () =>
-      [
-        { id: "METWORKING", title: "NETOWRKING PROJECT", color: "bg-yellow-500", initials: "🐧", people: 38, projects: 12 },
-        { id: "Social Media Marketing Team", title: "Social Media Marketing Team", color: "bg-indigo-600", initials: "SM", people: 18, projects: 8 },
-        { id: "CS2075 Data Structures Laboratory", title: "CS2075 Data Structures Laboratory", color: "bg-pink-600", initials: "CD", people: 42, projects: 9 },
-        { id: "Data Structures", title: "Data Structures", color: "bg-yellow-400", initials: "🙂", people: 28, projects: 6 },
-        { id: "CS1010 - Programming for Problem Solving - Spring", title: "CS1010 - Programming for Problem Solving - Spring", color: "bg-blue-600", initials: "CP", people: 55, projects: 14 },
-        { id: "Data Communication (CS3001)", title: "Data Communication (CS3001)", color: "bg-cyan-600", initials: "DC", people: 31, projects: 7 },
-        { id: "CS2006 Design & Analysis of Algorithm SPRING 2025", title: "CS2006 Design & Analysis of Algorithm SPRING 2025", color: "bg-fuchsia-600", initials: "😊", people: 47, projects: 11 },
-        { id: "2025 Operating Systems (CS3009)", title: "2025 Operating Systems (CS3009)", color: "bg-teal-700", initials: "OS", people: 36, projects: 10 },
-        { id: "CS2066 Algorithm Design Laboratory", title: "CS2066 Algorithm Design Laboratory", color: "bg-green-600", initials: "🍁", people: 24, projects: 5 },
-      ].map((i) => ({ ...i, slug: toSlug(i.id) })),
-    []
-  );
+  const colors = ["bg-yellow-500", "bg-indigo-600", "bg-pink-600", "bg-yellow-400", "bg-blue-600", "bg-cyan-600", "bg-fuchsia-600", "bg-teal-700", "bg-green-600", "bg-purple-600", "bg-red-600", "bg-orange-600"];
+  
+  const [teams, setTeams] = useState<Array<{ id: string; title: string; color: string; initials: string; people: number; projects: number; slug: string; description?: string }>>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [teams, setTeams] = useState(seedTeams);
+  useEffect(() => {
+    const fetchTeams = async () => {
+      try {
+        setLoading(true);
+        const data = await apiGet<{ projects: Array<{ id: string; title: string; slug?: string; summary?: string }> }>('/projects');
+        const projects = data.projects || [];
+        
+        // Fetch member count for each project
+        const teamsWithMembers = await Promise.all(
+          projects.map(async (project, index) => {
+            try {
+              const membersData = await apiGet<{ members: Array<any> }>(`/teams/${project.id}/members`);
+              const memberCount = membersData.members?.length || 1;
+              return {
+                id: project.id,
+                title: project.title,
+                color: colors[index % colors.length],
+                initials: getInitials(project.title),
+                people: memberCount,
+                projects: 1, // Each project is a team
+                slug: project.slug || toSlug(project.title),
+                description: project.summary
+              };
+            } catch {
+              return {
+                id: project.id,
+                title: project.title,
+                color: colors[index % colors.length],
+                initials: getInitials(project.title),
+                people: 1,
+                projects: 1,
+                slug: project.slug || toSlug(project.title),
+                description: project.summary
+              };
+            }
+          })
+        );
+        
+        setTeams(teamsWithMembers);
+      } catch (err: any) {
+        console.error('Failed to fetch teams:', err);
+        toast({
+          title: "Error",
+          description: "Failed to load teams. Please try again.",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTeams();
+  }, [toast]);
 
   const getInitials = (name: string) => {
     const words = name.trim().split(/\s+/).slice(0, 2);
@@ -123,8 +165,23 @@ const Teams = () => {
             Join or create team
           </Button>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-7">
-          {teams.map((item) => (
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <span className="ml-2 text-muted-foreground">Loading teams...</span>
+          </div>
+        ) : teams.length === 0 ? (
+          <div className="text-center py-12">
+            <Users className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No teams yet</h3>
+            <p className="text-muted-foreground mb-4">Join a team or create one to get started!</p>
+            <Button onClick={() => { setActiveView("create"); setDialogOpen(true); }}>
+              Create Your First Team
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-7">
+            {teams.map((item) => (
             <Card
               key={item.id}
               onClick={() => navigate(`/teams/${item.slug}`)}
@@ -147,7 +204,8 @@ const Teams = () => {
               </div>
             </Card>
           ))}
-        </div>
+          </div>
+        )}
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent>

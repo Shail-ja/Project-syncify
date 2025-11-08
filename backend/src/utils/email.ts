@@ -23,7 +23,7 @@ export interface InvitationEmailData {
 export async function sendInvitationEmail(data: InvitationEmailData): Promise<void> {
   const { invitedEmail, projectTitle, inviterEmail, inviterName, role, invitationToken, projectId } = data;
   
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
   const acceptUrl = `${frontendUrl}/invitations/accept?token=${invitationToken}`;
   const declineUrl = `${frontendUrl}/invitations/decline?token=${invitationToken}`;
   

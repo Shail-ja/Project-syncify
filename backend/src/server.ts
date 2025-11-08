@@ -14,7 +14,6 @@ import calendarRoutes from "./routes/calendar";
 import teamRoutes from "./routes/teams";
 import activityRoutes from "./routes/activity";
 import assistantRoutes from "./routes/assistant";
-import invitationRoutes from "./routes/invitation"; 
 import realtime from "./sockets/realtime";
 import { startReminderWorker } from "./utils/reminders";
 
@@ -42,8 +41,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ Fix: Do NOT mount invitationRoutes at "/" – use a namespace
-app.use("/invitations", invitationRoutes);
 
 // ✅ Email confirmation redirect handler
 app.get("/", (req, res) => {
