@@ -6,10 +6,50 @@ import AnalyticsDashboard from "@/components/AnalyticsDashboard";
 import MagicBento from "@/components/MagicBento";
 import { Link, Navigate } from "react-router-dom";
 import { Rocket, Users, Zap, Shield, BarChart3, MessageSquare } from "lucide-react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 
 const Index = () => {
-  // Redirect authenticated users to dashboard
-  const isAuthenticated = typeof window !== 'undefined' && !!localStorage.getItem('token');
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    // Check authentication status using Supabase session
+    const checkAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.warn("Auth check error:", error);
+          setIsAuthenticated(false);
+          return;
+        }
+        setIsAuthenticated(!!session?.access_token);
+      } catch (err) {
+        console.error("Auth check failed:", err);
+        setIsAuthenticated(false);
+      }
+    };
+
+    checkAuth();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(!!session?.access_token);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // Show loading while checking authentication, then redirect if authenticated
+  if (isAuthenticated === null) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+
   if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />;
   }

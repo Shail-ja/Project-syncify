@@ -43,32 +43,15 @@ async function getAuthToken(): Promise<string | null> {
       }
     }
     
-    // No Supabase session found - check if we have a stored token
-    // This might be from an old login, so we'll try to restore the session
-    const storedToken = localStorage.getItem("token");
-    if (storedToken) {
-      // Try to set the session using the stored token
-      // First, check if it's a valid Supabase token by trying to get user info
-      try {
-        const { data: { user }, error: userError } = await supabase.auth.getUser(storedToken);
-        if (!userError && user) {
-          // Token is valid, but we need to restore the session
-          // Try to get a fresh session - Supabase should handle this automatically
-          // If that doesn't work, the user needs to sign in again
-          console.warn("Found stored token but no active Supabase session. User may need to sign in again.");
-        }
-      } catch (tokenErr) {
-        console.warn("Stored token is invalid:", tokenErr);
-        localStorage.removeItem("token");
-      }
-    }
-    
-    // No valid Supabase session found - clear stored token
+    // No valid Supabase session found - clear any stored tokens
+    // After proper logout, Supabase session is cleared, so any stored token is stale
     localStorage.removeItem("token");
+    localStorage.removeItem("email");
     return null;
   } catch (err) {
     console.error("Failed to get Supabase session:", err);
     localStorage.removeItem("token");
+    localStorage.removeItem("email");
     return null;
   }
 }

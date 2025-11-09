@@ -1,10 +1,70 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { LayoutDashboard, FolderKanban, Users, Settings } from "lucide-react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 
 const Navigation = () => {
   const location = useLocation();
-  const isAuthenticated = typeof window !== 'undefined' && !!localStorage.getItem('token');
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  
+  useEffect(() => {
+    // Check authentication status
+    const checkAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.warn("Auth check error:", error);
+          setIsAuthenticated(false);
+        } else {
+          setIsAuthenticated(!!session?.access_token);
+        }
+      } catch (err) {
+        console.error("Auth check failed:", err);
+        setIsAuthenticated(false);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkAuth();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(!!session?.access_token);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      // Sign out from Supabase (this clears the session)
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error("Logout error:", error);
+      }
+      
+      // Clear all authentication-related data from localStorage
+      localStorage.removeItem('token');
+      localStorage.removeItem('email');
+      
+      // Update authentication state
+      setIsAuthenticated(false);
+      
+      // Redirect to home page
+      window.location.href = '/';
+    } catch (err) {
+      console.error("Logout failed:", err);
+      // Even if there's an error, clear localStorage and redirect
+      localStorage.removeItem('token');
+      localStorage.removeItem('email');
+      window.location.href = '/';
+    }
+  };
   
   const navItems = isAuthenticated
     ? [
@@ -47,24 +107,22 @@ const Navigation = () => {
             ))}
           </div>
 
-          {!isAuthenticated ? (
-            <Link to="/signin">
-              <Button size="sm" className="bg-primary shadow-glow-primary">
-                Login
+          {!isLoading && (
+            !isAuthenticated ? (
+              <Link to="/signin">
+                <Button size="sm" className="bg-primary shadow-glow-primary">
+                  Login
+                </Button>
+              </Link>
+            ) : (
+              <Button
+                size="sm"
+                className="bg-secondary shadow-glow-secondary"
+                onClick={handleLogout}
+              >
+                Logout
               </Button>
-            </Link>
-          ) : (
-            <Button
-              size="sm"
-              className="bg-secondary shadow-glow-secondary"
-              onClick={() => {
-                localStorage.removeItem('token');
-                localStorage.removeItem('email');
-                window.location.href = '/';
-              }}
-            >
-              Logout
-            </Button>
+            )
           )}
         </div>
       </div>
