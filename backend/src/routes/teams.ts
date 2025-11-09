@@ -5,50 +5,46 @@ import logAction from '../utils/LogAction';
 
 const router = express.Router();
 
-// Get project members
-router.get('/:projectId/members', requireAuth, async (req, res) => {
-  const { projectId } = req.params;
-  try {
-    const { data, error } = await supabase.from('project_members').select('*').eq('project_id', projectId);
-    if (error) throw error;
-    res.json({ members: data });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message || err });
-  }
-});
-
-// Get pending invitations for a project (only project owner can see)
-router.get('/:projectId/invitations', requireAuth, async (req, res) => {
-  const { projectId } = req.params;
-  const userId = (req.user as any)?.id as string | undefined;
+// Get invitation by token (for frontend to check invitation status)
+// This must come BEFORE parameterized routes like /:projectId/*
+router.get('/invitations/:token', async (req, res) => {
+  const { token } = req.params;
   
   try {
-    if (!userId) return res.status(401).json({ error: 'Missing authenticated user id' });
-    
-    // Check if user is the project owner
-    const { data: project, error: projectErr } = await supabase
-      .from('projects')
-      .select('owner_id')
-      .eq('id', projectId)
+    const { data: invitation, error } = await supabase
+      .from('project_invitations')
+      .select(`
+        id,
+        project_id,
+        invited_by_email,
+        invited_email,
+        role,
+        status,
+        expires_at,
+        created_at,
+        projects:project_id (
+          id,
+          title
+        )
+      `)
+      .eq('token', token)
       .single();
     
-    if (projectErr || !project) {
-      return res.status(404).json({ error: 'Project not found' });
+    if (error || !invitation) {
+      return res.status(404).json({ error: 'Invitation not found' });
     }
     
-    if (project.owner_id !== userId) {
-      return res.status(403).json({ error: 'Only the project owner can view invitations' });
+    // Check if expired
+    if (invitation.status === 'pending' && new Date(invitation.expires_at) < new Date()) {
+      // Update to expired
+      await supabase
+        .from('project_invitations')
+        .update({ status: 'expired' })
+        .eq('id', invitation.id);
+      invitation.status = 'expired';
     }
     
-    const { data, error } = await supabase
-      .from('project_invitations')
-      .select('*')
-      .eq('project_id', projectId)
-      .in('status', ['pending', 'accepted', 'declined'])
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
-    res.json({ invitations: data });
+    res.json({ invitation });
   } catch (err: any) {
     res.status(500).json({ error: err.message || err });
   }
@@ -193,45 +189,50 @@ router.post('/invitations/decline', requireAuth, async (req, res) => {
   }
 });
 
-// Get invitation by token (for frontend to check invitation status)
-router.get('/invitations/:token', async (req, res) => {
-  const { token } = req.params;
+// Get project members
+router.get('/:projectId/members', requireAuth, async (req, res) => {
+  const { projectId } = req.params;
+  try {
+    const { data, error } = await supabase.from('project_members').select('*').eq('project_id', projectId);
+    if (error) throw error;
+    res.json({ members: data });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || err });
+  }
+});
+
+// Get pending invitations for a project (only project owner can see)
+router.get('/:projectId/invitations', requireAuth, async (req, res) => {
+  const { projectId } = req.params;
+  const userId = (req.user as any)?.id as string | undefined;
   
   try {
-    const { data: invitation, error } = await supabase
-      .from('project_invitations')
-      .select(`
-        id,
-        project_id,
-        invited_by_email,
-        invited_email,
-        role,
-        status,
-        expires_at,
-        created_at,
-        projects:project_id (
-          id,
-          title
-        )
-      `)
-      .eq('token', token)
+    if (!userId) return res.status(401).json({ error: 'Missing authenticated user id' });
+    
+    // Check if user is the project owner
+    const { data: project, error: projectErr } = await supabase
+      .from('projects')
+      .select('owner_id')
+      .eq('id', projectId)
       .single();
     
-    if (error || !invitation) {
-      return res.status(404).json({ error: 'Invitation not found' });
+    if (projectErr || !project) {
+      return res.status(404).json({ error: 'Project not found' });
     }
     
-    // Check if expired
-    if (invitation.status === 'pending' && new Date(invitation.expires_at) < new Date()) {
-      // Update to expired
-      await supabase
-        .from('project_invitations')
-        .update({ status: 'expired' })
-        .eq('id', invitation.id);
-      invitation.status = 'expired';
+    if (project.owner_id !== userId) {
+      return res.status(403).json({ error: 'Only the project owner can view invitations' });
     }
     
-    res.json({ invitation });
+    const { data, error } = await supabase
+      .from('project_invitations')
+      .select('*')
+      .eq('project_id', projectId)
+      .in('status', ['pending', 'accepted', 'declined'])
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    res.json({ invitations: data });
   } catch (err: any) {
     res.status(500).json({ error: err.message || err });
   }

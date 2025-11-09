@@ -14,6 +14,7 @@ import calendarRoutes from "./routes/calendar";
 import teamRoutes from "./routes/teams";
 import activityRoutes from "./routes/activity";
 import assistantRoutes from "./routes/assistant";
+import taskRoutes from "./routes/tasks";
 import realtime from "./sockets/realtime";
 import { startReminderWorker } from "./utils/reminders";
 

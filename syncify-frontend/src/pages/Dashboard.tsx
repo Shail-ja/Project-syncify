@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiPost } from "@/lib/api";
@@ -295,20 +296,14 @@ const Dashboard = () => {
                     onClick={async () => {
                       try {
                         setCtLoading(true);
-                        // Create default Inbox board
-                        const boardRes = await apiPost<{ board: { id: string } }>(`/projects/${ctProjectId}/boards`, { title: "Inbox" });
-                        const boardId = boardRes.board.id;
-                        // Create default column
-                        const columnRes = await apiPost<{ column: { id: string } }>(`/boards/${boardId}/columns`, { title: "To Do", position: 0 });
-                        const columnId = (Array.isArray(columnRes.column) ? columnRes.column[0] : columnRes.column).id as string;
-                        // Create task
-                        await apiPost(`/columns/${columnId}/tasks`, {
+                        // Create task using new endpoint that checks assignee membership
+                        await apiPost(`/projects/${ctProjectId}/tasks`, {
                           title: ctTitle,
                           description: ctDescription,
                           assignee: ctAssignee || null,
                           due_date: ctDueDate || null,
                         });
-                        toast({ title: "Task created" });
+                        toast({ title: "Task created successfully" });
                         setCreateOpen(false);
                         setCtProjectId("");
                         setCtTitle("");
@@ -316,7 +311,11 @@ const Dashboard = () => {
                         setCtAssignee("");
                         setCtDueDate("");
                       } catch (e: any) {
-                        toast({ title: "Failed to create task", description: e?.message || String(e) });
+                        toast({ 
+                          title: "Failed to create task", 
+                          description: e?.message || String(e),
+                          variant: "destructive"
+                        });
                       } finally {
                         setCtLoading(false);
                       }
@@ -351,7 +350,16 @@ const Dashboard = () => {
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="invRole">Role</Label>
-                      <Input id="invRole" value={invRole} onChange={(e) => setInvRole(e.target.value)} placeholder="member | manager | admin" />
+                      <Select value={invRole} onValueChange={setInvRole}>
+                        <SelectTrigger id="invRole">
+                          <SelectValue placeholder="Select a role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="member">Member</SelectItem>
+                          <SelectItem value="manager">Manager</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>
